@@ -1,0 +1,120 @@
+To demonstrate dynamic remote loading of a React component with error boundary support using TypeScript and Module Federation, let's create a simple example:
+
+Main Application (Host): This is the application that will dynamically load a remote React component and wrap it with an error boundary.
+
+Remote Component Application: This is a separate React application that exposes a component which the main application will load remotely.
+
+Here's how you can set it up:
+
+1. Main Application (Host)
+
+npx create-react-app main-app --template typescript
+cd main-app
+npm install @module-federation/core react-error-boundary
+
+In your src/App.tsx, you can define the dynamic loading logic and error boundary:
+
+import React, { lazy, Suspense } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
+import { loadRemoteComponent } from './loadRemoteComponent';
+
+const RemoteComponent = lazy(() => loadRemoteComponent('http://localhost:3001/remoteEntry.js', 'RemoteApp', './App'));
+
+function App() {
+  return (
+    <div className="App">
+      <h1>Main Application</h1>
+      <ErrorBoundary fallback={<div>Error loading remote component!</div>}>
+        <Suspense fallback={<div>Loading...</div>}>
+          <RemoteComponent />
+        </Suspense>
+      </ErrorBoundary>
+    </div>
+  );
+}
+
+export default App;
+
+
+loadRemoteComponent.ts file:
+
+import { loadRemoteEntry } from '@module-federation/core';
+
+export async function loadRemoteComponent(url: string, scope: string, module: string) {
+  try {
+    const container = window[scope];
+    // Initialize the container if it doesn't exist
+    if (!container) {
+      await loadRemoteEntry(url, scope);
+    }
+    // Lookup the remote module
+    const factory = await window[scope].get(module);
+    const Module = factory();
+    return Module;
+  } catch (error) {
+    console.error('Error loading remote component:', error);
+    throw error;
+  }
+}
+
+
+2. Remote Component Application
+
+
+npx create-react-app remote-app --template typescript
+cd remote-app
+npm install @module-federation/core
+
+
+In your src/App.tsx, you can define the component to be exposed:
+
+import React from 'react';
+
+function App() {
+  return (
+    <div className="App">
+      <h2>Remote Component</h2>
+    </div>
+  );
+}
+
+export default App;
+
+
+In webpack.config.js of the remote app, configure Module Federation:
+
+const { ModuleFederationPlugin } = require('webpack').container;
+const path = require('path');
+
+module.exports = {
+  mode: 'development',
+  devServer: {
+    port: 3001,
+  },
+  output: {
+    publicPath: 'http://localhost:3001/',
+  },
+  plugins: [
+    new ModuleFederationPlugin({
+      name: 'RemoteApp',
+      filename: 'remoteEntry.js',
+      exposes: {
+        './App': './src/App',
+      },
+    }),
+  ],
+};
+
+
+Now, start both applications:
+
+
+# Start main application
+cd main-app
+npm start
+
+# Start remote application
+cd remote-app
+npm start
+
+This setup demonstrates how to dynamically load a remote React component into the main application and wrap it with an error boundary for error handling.
